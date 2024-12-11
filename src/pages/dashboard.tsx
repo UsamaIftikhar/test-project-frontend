@@ -31,23 +31,16 @@ interface FormValues {
   maxPhotos: number;
 }
 
-// Validation Schema
 const validationSchema = Yup.object({
   carModel: Yup.string().required('Car model is required.'),
-  price: Yup.number()
-    .required('Price is required.')
-    .min(1, 'Price must be greater than zero.'),
-  phone: Yup.string()
-    .matches(/^[0-9]{10}$/, 'Phone number must be 10 digits.')
-    .required('Phone number is required.'),
+  price: Yup.number().required('Price is required.').min(1, 'Price must be greater than zero.'),
+  phone: Yup.string().matches(/^[0-9]{10}$/, 'Phone number must be 10 digits.').required('Phone number is required.'),
   city: Yup.string().required('City is required.'),
   photos: Yup.array()
     .of(Yup.mixed())
     .min(1, 'At least one photo is required.')
     .max(Yup.ref('maxPhotos'), 'You cannot upload more than the selected number of photos.'),
-  maxPhotos: Yup.number()
-    .required('Please select the maximum number of photos allowed.')
-    .min(1, 'You must allow at least one photo.'),
+  maxPhotos: Yup.number().required('Please select the maximum number of photos allowed.').min(1, 'You must allow at least one photo.'),
 });
 
 const Dashboard: React.FC = () => {
@@ -65,8 +58,15 @@ const Dashboard: React.FC = () => {
         formData.append('photos', image);
       });
 
+      const token = localStorage.getItem('token'); // Retrieve the token stored after login
+
+      if (!token) {
+        throw new Error('No token found. Please log in.');
+      }
+      console.log("Token", token)
       const response = await axios.post('http://localhost:5000/api/cars', formData, {
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
       });
@@ -75,7 +75,6 @@ const Dashboard: React.FC = () => {
         alert('Car added successfully!');
       }
     } catch (error) {
-      console.error('Error submitting car details:', error);
       alert('Failed to add car. Please try again.');
     }
   };
@@ -95,9 +94,14 @@ const Dashboard: React.FC = () => {
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    const updatedPhotos = [...images, ...files];
+    const validFiles = files.filter((file) => file.size <= 5 * 1024 * 1024);
+    const updatedPhotos = [...images, ...validFiles];
     if (updatedPhotos.length > formik.values.maxPhotos) {
       setError(`You can upload up to ${formik.values.maxPhotos} photos only.`);
+      return;
+    }
+    if (validFiles.length < files.length) {
+      setError('Each photo must be 5 MB or smaller.');
       return;
     }
     setImages(updatedPhotos);
@@ -116,6 +120,7 @@ const Dashboard: React.FC = () => {
       <Typography variant="h4" component="h1" gutterBottom textAlign="center">
         Add Car Details
       </Typography>
+      
       <Stack
         component="form"
         onSubmit={formik.handleSubmit}
@@ -184,8 +189,8 @@ const Dashboard: React.FC = () => {
             value={formik.values.maxPhotos}
             onChange={(e) => {
               formik.handleChange(e);
-              formik.setFieldValue('photos', []); // Reset photos if max changes
-              setImages([]); // Clear images
+              formik.setFieldValue('photos', []);
+              setImages([]);
             }}
           >
             {[1, 2, 3, 4, 5].map((num) => (
@@ -195,6 +200,9 @@ const Dashboard: React.FC = () => {
             ))}
           </Select>
         </FormControl>
+        <Typography variant="body2" color="textSecondary" textAlign="center" marginBottom={2}>
+        Maximum photo size is 5 MB. You can upload up to the selected number of photos.
+      </Typography>
         <Box>
           <Button
             variant="contained"

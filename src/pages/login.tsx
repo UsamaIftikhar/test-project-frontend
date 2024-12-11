@@ -1,4 +1,4 @@
-import { signIn } from 'next-auth/react';
+import { signIn, getSession } from 'next-auth/react';
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import { Box, TextField, Button, Typography, CircularProgress } from '@mui/material';
@@ -19,40 +19,47 @@ const Login = () => {
     setEmailError('');
     setPasswordError('');
     setFormError('');
-
+  
     try {
-      // Validate the form using Yup
-      console.log('Validating:', { email, password });
-
-      let validation = await loginSchema.validate({ email, password }, { abortEarly: false });
-      console.log(
-        "validation", validation
-      )
+      // Validate input fields using Yup schema
+      await loginSchema.validate({ email, password }, { abortEarly: false });
+  
       setIsLoading(true);
-
+  
+      // Perform sign-in using NextAuth credentials provider
       const result = await signIn('credentials', {
-        redirect: false,
+        redirect: false, // Prevent default redirect
         email,
         password,
       });
-
+  
       setIsLoading(false);
-
+  
       if (result?.error) {
+        // Handle invalid credentials
         setFormError('Invalid email or password');
       } else {
+        // Fetch the current session
+        const session = await getSession();
+  
+        if (session?.user?.accessToken) {
+          // Store the access token in local storage
+          localStorage.setItem('token', session.user.accessToken);
+          console.log('Access token stored in local storage:', session.user.accessToken);
+        }
+  
+        // Redirect to the dashboard
         router.push('/dashboard');
       }
     } catch (validationError) {
       if (validationError instanceof ValidationError) {
-        console.log('Validation Errors:', validationError.inner); // Debug errors
         validationError.inner.forEach((err) => {
           if (err.path === 'email') setEmailError(err.message);
           if (err.path === 'password') setPasswordError(err.message);
         });
       }
     }
-  };
+  };  
 
   return (
     <Box
@@ -70,12 +77,12 @@ const Login = () => {
       <Typography variant="h4" gutterBottom>
         Login
       </Typography>
-     <TextField
+      <TextField
         label="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        error={!!emailError} // Displays error state if emailError exists
-        helperText={emailError} // Displays the error message
+        error={!!emailError}
+        helperText={emailError}
         fullWidth
         sx={{ mb: 2, maxWidth: 400 }}
         disabled={isLoading}
@@ -85,13 +92,13 @@ const Login = () => {
         type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        error={!!passwordError} // Displays error state if passwordError exists
-        helperText={passwordError} // Displays the error message
+        error={!!passwordError}
+        helperText={passwordError}
         fullWidth
         sx={{ mb: 2, maxWidth: 400 }}
         disabled={isLoading}
       />
-       {formError && (
+      {formError && (
         <Typography color="error" gutterBottom>
           {formError}
         </Typography>
